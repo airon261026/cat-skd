@@ -94,7 +94,42 @@
     $("btnSwitch").textContent = daftar ? "Masuk" : "Daftar";
     document.querySelector("#scrLogin h2").textContent = daftar ? "Daftar Akun Admin" : "Login Admin";
     $("inPass").autocomplete = daftar ? "new-password" : "current-password";
+    $("forgotBox").classList.toggle("hidden", daftar);
     $("loginErr").textContent = "";
+  };
+
+  /* ---------- lupa kata sandi ---------- */
+  $("btnForgot").onclick = async (e) => {
+    e.preventDefault();
+    const email = $("inEmail").value.trim();
+    if (!email) return ($("loginErr").textContent = "Isi email Anda dulu, lalu klik Lupa kata sandi.");
+    loading(true);
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+    loading(false);
+    $("loginErr").textContent = error
+      ? (/rate|seconds/i.test(error.message) ? "Terlalu sering meminta. Tunggu beberapa menit lalu coba lagi." : error.message)
+      : `Link untuk membuat kata sandi baru sudah dikirim ke ${email}. Cek kotak masuk / folder spam.`;
+  };
+  function showReset() {
+    $("scrLogin").querySelector(".login-card").classList.add("hidden");
+    $("resetCard").classList.remove("hidden");
+    $("scrLogin").classList.remove("hidden");
+    $("app").classList.add("hidden");
+  }
+  sb.auth.onAuthStateChange((ev) => { if (ev === "PASSWORD_RECOVERY") showReset(); });
+  $("btnSaveNewPass").onclick = async () => {
+    const p1 = $("inNewPass").value, p2 = $("inNewPass2").value;
+    if (p1.length < 8) return ($("resetErr").textContent = "Kata sandi minimal 8 karakter.");
+    if (p1 !== p2) return ($("resetErr").textContent = "Ulangi kata sandi tidak sama.");
+    loading(true);
+    const { error } = await sb.auth.updateUser({ password: p1 });
+    loading(false);
+    if (error) return ($("resetErr").textContent = error.message);
+    history.replaceState(null, "", location.pathname);
+    $("resetCard").classList.add("hidden");
+    $("scrLogin").querySelector(".login-card").classList.remove("hidden");
+    toast("Kata sandi baru tersimpan.");
+    boot();
   };
   $("btnLogin").onclick = async () => {
     $("loginErr").textContent = "";
@@ -732,6 +767,8 @@
   /* ---------- mulai ---------- */
   if (cfg.SUPABASE_URL.includes("ISI-PROJECT")) {
     $("loginErr").textContent = "Aplikasi belum dikonfigurasi: isi SUPABASE_URL dan SUPABASE_KEY di config.js.";
+  } else if (/type=recovery/.test(location.hash)) {
+    showReset(); // datang dari link email "lupa kata sandi"
   } else {
     boot();
   }

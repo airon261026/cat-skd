@@ -37,7 +37,18 @@
     <button class="btn primary block" id="btnLogin">Masuk</button>
     <p class="small muted" style="text-align:center;margin:14px 0 0">
       <span id="swText">Belum punya akun?</span> <a href="#" id="btnSwitch">Daftar</a>
+      <span id="forgotBox"> · <a href="#" id="btnForgot">Lupa kata sandi?</a></span>
     </p>
+  </div>
+  <div class="card login-card hidden" id="resetCard">
+    <h2>Buat Kata Sandi Baru</h2>
+    <p class="muted">Masukkan kata sandi baru untuk akun Anda.</p>
+    <label>Kata Sandi Baru</label>
+    <input id="inNewPass" type="password" autocomplete="new-password">
+    <label>Ulangi Kata Sandi Baru</label>
+    <input id="inNewPass2" type="password" autocomplete="new-password">
+    <div class="err" id="resetErr"></div>
+    <button class="btn primary block" id="btnSaveNewPass">Simpan Kata Sandi</button>
   </div>
 </section>
 
