@@ -70,3 +70,11 @@ input[type=number],input[type=datetime-local],input[type=email],input[type=passw
 @media print{.side,.tools,.filters{display:none!important} #app{display:block}}
 .logo-preview img{height:56px;margin-top:12px;border:1px solid var(--line);border-radius:8px;padding:4px;background:#fff}
 .topbar .org-logo{height:40px}
+@media (max-width:600px){
+  .cards{grid-template-columns:1fr 1fr;gap:8px}
+  .stat-card{padding:10px 12px}
+  .stat-card .val{font-size:22px}
+  .main{padding:14px 12px}
+  .side{padding:8px;gap:2px}
+  .side a{padding:8px 10px;font-size:13px}
+}
