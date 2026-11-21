@@ -166,7 +166,7 @@
       const b = document.createElement("button");
       b.textContent = i + 1;
       b.id = "nv" + i;
-      b.onclick = () => go(i);
+      b.onclick = () => { go(i); document.querySelector(".exam-side").classList.remove("open"); };
       wrap.appendChild(b);
     });
   }
@@ -180,6 +180,7 @@
       $("nv" + i).className = (X.flags[i] ? "ragu" : j ? "done" : "") + (i === X.cur ? " cur" : "");
     });
     $("statBox").innerHTML = `<span>Dijawab: <b>${done}</b></span><span>Ragu: <b>${ragu}</b></span><span>Belum: <b>${X.items.length - done}</b></span>`;
+    $("btnNavToggle").textContent = `☰ Nomor Soal · dijawab ${done}/${X.items.length}` + (ragu ? ` · ragu ${ragu}` : "");
   }
 
   function renderSoal() {
@@ -202,7 +203,8 @@
     $("btnRagu").textContent = X.flags[i] ? "✓ Ragu-ragu" : "Ragu-ragu";
     refreshNav();
     const cur = $("nv" + i);
-    cur && cur.scrollIntoView({ block: "nearest" });
+    if (cur && cur.offsetParent) cur.scrollIntoView({ block: "nearest" });
+    if (window.innerWidth <= 900) window.scrollTo({ top: 0 });
     sessionStorage.setItem("cat_cur_" + kode, i);
   }
 
@@ -221,6 +223,7 @@
   $("btnNext").onclick = () => (X.cur === X.items.length - 1 ? confirmFinish() : go(X.cur + 1));
   $("btnRagu").onclick = () => { X.flags[X.cur] = !X.flags[X.cur]; queueSave(); renderSoal(); };
   $("btnFinish").onclick = () => confirmFinish();
+  $("btnNavToggle").onclick = () => document.querySelector(".exam-side").classList.toggle("open");
   document.querySelectorAll("[data-font]").forEach((b) => (b.onclick = () => {
     fontSize = Math.min(24, Math.max(14, fontSize + Number(b.dataset.font)));
     document.documentElement.style.setProperty("--qsize", fontSize + "px");
