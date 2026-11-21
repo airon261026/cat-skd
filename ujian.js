@@ -6,7 +6,10 @@
   const cfg = window.CAT_CONFIG;
   const sb = supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_KEY, { auth: { persistSession: false } });
   const LETTER = ["A", "B", "C", "D", "E"];
-  const NAMA = { TWK: "Tes Wawasan Kebangsaan", TIU: "Tes Intelegensia Umum", TKP: "Tes Karakteristik Pribadi" };
+  const DEF_LBL = { TWK: { code: "TWK", name: "Tes Wawasan Kebangsaan" }, TIU: { code: "TIU", name: "Tes Intelegensia Umum" }, TKP: { code: "TKP", name: "Tes Karakteristik Pribadi" } };
+  let LBL = DEF_LBL; // label subtes sesuai paket soal
+  const setLbl = (l) => { if (l && l.TWK) LBL = l; };
+  const C = (k) => LBL[k].code, N = (k) => LBL[k].name;
   const SECS = (m) => (m === "FULL" ? ["TWK", "TIU", "TKP"] : [m]);
   const KEY = "cat_online_kode";
 
@@ -65,6 +68,7 @@
     loading(true);
     try {
       info = await rpc("peserta_cek", { p_code: kode });
+      setLbl(info.labels);
       localStorage.setItem(KEY, kode);
       setBrand(info);
       if (info.status === "baru") renderInfo();
@@ -93,7 +97,7 @@
     SECS(info.mode).forEach((k) => {
       const n = (info.counts && info.counts[k]) || 0;
       tN += n;
-      rows += `<tr><td>${k} — ${NAMA[k]}</td><td>${n}</td><td>${n * 5}</td><td>${info.pg[k]}</td></tr>`;
+      rows += `<tr><td>${C(k)} — ${N(k)}</td><td>${n}</td><td>${n * 5}</td><td>${info.pg[k]}</td></tr>`;
     });
     if (info.mode === "FULL") rows += `<tr><td><b>Total</b></td><td><b>${tN}</b></td><td><b>${tN * 5}</b></td><td>—</td></tr>`;
     $("komposisi").innerHTML = rows;
@@ -126,6 +130,7 @@
 
   /* ---------- 3. UJIAN ---------- */
   function startExam(d) {
+    setLbl(d.labels);
     X = {
       items: d.items, answers: d.answers, flags: d.flags, tab: d.tab_switches || 0,
       deadline: Date.parse(d.deadline), cur: 0, mode: d.mode
@@ -158,7 +163,7 @@
     X.items.forEach((x, i) => {
       if (x.sec !== last) {
         last = x.sec;
-        g.insertAdjacentHTML("beforeend", `<div class="sec-label">${x.sec} — ${NAMA[x.sec]}</div>`);
+        g.insertAdjacentHTML("beforeend", `<div class="sec-label">${C(x.sec)} — ${N(x.sec)}</div>`);
         wrap = document.createElement("div");
         wrap.className = "nav";
         g.appendChild(wrap);
@@ -185,7 +190,7 @@
 
   function renderSoal() {
     const i = X.cur, x = X.items[i];
-    $("qSec").textContent = x.sec;
+    $("qSec").textContent = C(x.sec);
     $("qNo").textContent = i + 1;
     $("qText").textContent = x.q;
     const box = $("qOpts");
@@ -324,6 +329,7 @@
 
   /* ---------- 4. HASIL ---------- */
   function renderResult(r) {
+    setLbl(r.labels);
     finishing = true;
     clearInterval(tick);
     sessionStorage.removeItem("cat_cur_" + kode);
@@ -341,7 +347,7 @@
     secs.forEach((k) => {
       const v = r[k] ?? 0, mx = (r.max && r.max[k]) || 0, ok = v >= r.pg[k];
       tMax += mx;
-      rows += `<tr><td><b>${k}</b><br><span class="small muted">${NAMA[k]}</span></td>
+      rows += `<tr><td><b>${C(k)}</b><br><span class="small muted">${N(k)}</span></td>
         <td><b>${v}</b> / ${mx}<div class="bar"><i style="width:${mx ? (v / mx) * 100 : 0}%"></i></div></td>
         <td>${r.pg[k]}</td><td class="${ok ? "ok" : "no"}">${ok ? "Memenuhi" : "Tidak Memenuhi"}</td></tr>`;
     });

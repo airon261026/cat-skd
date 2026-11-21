@@ -13,6 +13,25 @@
     TKP: { label: "TKP saja", menit: 41 }
   };
   const SECS = (m) => (m === "FULL" ? ["TWK", "TIU", "TKP"] : [m]);
+  const SLOT = ["TWK", "TIU", "TKP"];
+  const SN = { TWK: 1, TIU: 2, TKP: 3 };
+  const pkgs = {}; // paket soal dari database
+  const pkg = (id) => pkgs[id] || pkgs.CPNS || { name: "SKD CPNS", c1: "TWK", n1: NAMA.TWK, j1: 30, c2: "TIU", n2: NAMA.TIU, j2: 35, c3: "TKP", n3: NAMA.TKP, j3: 45, duration: 100, pg1: 65, pg2: 80, pg3: 166 };
+  const code = (pid, k) => pkg(pid)["c" + SN[k]];
+  const sname = (pid, k) => pkg(pid)["n" + SN[k]];
+  const modeLabel = (mode, pid) => mode === "FULL" ? `Lengkap (${SLOT.map((k) => code(pid, k)).join(" + ")})` : `${code(pid, mode)} saja`;
+  const modeMenit = (mode, pid) => {
+    const P = pkg(pid);
+    if (mode === "FULL") return P.duration;
+    return Math.max(5, Math.round((P.duration * P["j" + SN[mode]]) / (P.j1 + P.j2 + P.j3)));
+  };
+  // paket untuk konteks tampilan (sesi terpilih, atau paket tunggal yang dipakai semua sesi)
+  const ctxPkg = (sid) => {
+    if (sid) return (sesiById(sid) || {}).package_id || "CPNS";
+    const set = new Set(st.sessions.map((s) => s.package_id || "CPNS"));
+    return set.size === 1 ? [...set][0] : null;
+  };
+  const hdr = (pid, k) => (pid ? code(pid, k) : "Subtes " + SN[k]);
 
   const $ = (id) => document.getElementById(id);
   const st = { user: null, me: null, orgs: [], org: null, sessions: [], parts: [], view: "ringkasan", sesiId: null, charts: {}, sort: { k: "total", d: -1 }, soal: [] };
@@ -170,6 +189,8 @@
       $("topRight").innerHTML = `<b>${esc(me.name || user.email)}</b><br>${isOwner() ? "Pemilik" : "Admin"}`;
       document.querySelectorAll(".owner-only").forEach((el) => el.classList.toggle("hidden", !isOwner()));
       await loadOrgs();
+      const { data: pk } = await sb.from("packages").select("*").order("created_at");
+      (pk || []).forEach((x) => (pkgs[x.id] = x));
       $("scrLogin").classList.add("hidden");
       $("app").classList.remove("hidden");
       if (st.baru) { setView("pengaturan"); toast("Lengkapi nama dan logo perusahaan terlebih dahulu."); }
@@ -267,8 +288,9 @@
       <div class="stat-card"><div class="lbl">Rata-rata Total</div><div class="val">${Math.round(avg(done.map((p) => p.total || 0)))}</div><div class="sub">Tertinggi ${done.length ? Math.max(...done.map((p) => p.total || 0)) : 0}</div></div>`;
 
     // passing grade acuan: sesi terpilih atau sesi terbaru
-    const ref = sesiById(sid) || st.sessions[0] || { pg_twk: 65, pg_tiu: 80, pg_tkp: 166 };
-    const secs = ["TWK", "TIU", "TKP"];
+    const cp = ctxPkg(sid);
+    const ref = sesiById(sid) || st.sessions.find((s) => (s.package_id || "CPNS") === cp) || { pg_twk: pkg(cp).pg1, pg_tiu: pkg(cp).pg2, pg_tkp: pkg(cp).pg3 };
+    const secs = SLOT;
     const avgSec = secs.map((k) => {
       const v = done.map((p) => p["score_" + k.toLowerCase()]).filter((x) => x !== null && x !== undefined);
       return Math.round(avg(v) * 10) / 10;
@@ -276,10 +298,10 @@
     drawChart("chAvg", {
       type: "bar",
       data: {
-        labels: secs,
+        labels: secs.map((k) => hdr(cp, k)),
         datasets: [
           { label: "Rata-rata peserta", data: avgSec, backgroundColor: "#1565c0", borderRadius: 6 },
-          { label: "Passing grade", data: [ref.pg_twk, ref.pg_tiu, ref.pg_tkp], backgroundColor: "#f9a825", borderRadius: 6 }
+          ...(cp ? [{ label: "Passing grade", data: [ref.pg_twk, ref.pg_tiu, ref.pg_tkp], backgroundColor: "#f9a825", borderRadius: 6 }] : [])
         ]
       },
       options: { responsive: true, plugins: { legend: { position: "bottom" } }, scales: { y: { beginAtZero: true } } }
@@ -289,7 +311,7 @@
       data: { labels: ["Memenuhi", "Tidak memenuhi", "Belum selesai"], datasets: [{ data: [lulus, done.length - lulus, parts.length - done.length], backgroundColor: ["#2e7d32", "#c62828", "#cfd6de"] }] },
       options: { responsive: true, plugins: { legend: { position: "bottom" } } }
     });
-    const maxT = Math.max(550, ...done.map((p) => p.total || 0));
+    const maxT = Math.max(cp ? (pkg(cp).j1 + pkg(cp).j2 + pkg(cp).j3) * 5 : 550, ...done.map((p) => p.total || 0));
     const step = 50, bins = [];
     for (let b = 0; b < maxT; b += step) bins.push({ l: `${b}–${b + step - 1}`, n: 0, lo: b });
     done.forEach((p) => { const i = Math.min(bins.length - 1, Math.floor((p.total || 0) / step)); bins[i].n++; });
@@ -300,7 +322,7 @@
     });
 
     const top = done.slice().sort((a, b) => (b.total || 0) - (a.total || 0)).slice(0, 10);
-    $("topTable").innerHTML = `<tr><th>#</th><th>Nama</th><th>No. Peserta</th><th>Sesi</th><th class="num">TWK</th><th class="num">TIU</th><th class="num">TKP</th><th class="num">Total</th><th>Status</th></tr>` +
+    $("topTable").innerHTML = `<tr><th>#</th><th>Nama</th><th>No. Peserta</th><th>Sesi</th>${SLOT.map((k) => `<th class="num">${hdr(cp, k)}</th>`).join("")}<th class="num">Total</th><th>Status</th></tr>` +
       (top.length ? top.map((p, i) => `<tr class="click" data-id="${p.id}"><td>${i + 1}</td><td><b>${esc(p.name)}</b></td><td>${esc(p.number || "-")}</td><td>${esc((sesiById(p.session_id) || {}).name)}</td>
         <td class="num">${p.score_twk ?? "-"}</td><td class="num">${p.score_tiu ?? "-"}</td><td class="num">${p.score_tkp ?? "-"}</td><td class="num"><b>${p.total}</b></td><td>${statusPill(p)}</td></tr>`).join("")
         : `<tr><td colspan="9" class="empty">Belum ada peserta yang menyelesaikan ujian.</td></tr>`);
@@ -315,31 +337,36 @@
      SESI UJIAN
      ========================================================= */
   function renderSesi() {
-    $("sesiTable").innerHTML = `<tr><th>Nama Sesi</th><th>Jenis</th><th class="num">Durasi</th><th>Jadwal</th><th class="num">Peserta</th><th class="num">Selesai</th><th>Hasil ke peserta</th></tr>` +
+    $("sesiTable").innerHTML = `<tr><th>Nama Sesi</th><th>Paket Soal</th><th>Jenis</th><th class="num">Durasi</th><th>Jadwal</th><th class="num">Peserta</th><th class="num">Selesai</th><th>Hasil ke peserta</th></tr>` +
       (st.sessions.length ? st.sessions.map((s) => {
         const ps = st.parts.filter((p) => p.session_id === s.id);
         return `<tr class="click" data-sid="${s.id}"><td><b>${esc(s.name)}</b><br><span class="small muted">Dibuat ${tgl(s.created_at)}</span></td>
-          <td>${MODE[s.mode].label}</td><td class="num">${s.duration_min} mnt</td>
+          <td>${esc(pkg(s.package_id).name)}</td><td>${modeLabel(s.mode, s.package_id)}</td><td class="num">${s.duration_min} mnt</td>
           <td class="small">${s.opens_at || s.closes_at ? `${tgl(s.opens_at)}<br>s.d. ${tgl(s.closes_at)}` : "Kapan saja"}</td>
           <td class="num">${ps.length}</td><td class="num">${ps.filter((p) => p.status === "selesai").length}</td>
           <td>${s.show_result ? "Ditampilkan" : "Disembunyikan"}</td></tr>`;
-      }).join("") : `<tr><td colspan="7" class="empty">Belum ada sesi. Klik <b>+ Sesi Baru</b> untuk memulai.</td></tr>`);
+      }).join("") : `<tr><td colspan="8" class="empty">Belum ada sesi. Klik <b>+ Sesi Baru</b> untuk memulai.</td></tr>`);
     $("sesiTable").querySelectorAll("tr[data-sid]").forEach((tr) => (tr.onclick = () => { st.sesiId = tr.dataset.sid; setView("sesidetail"); }));
   }
 
   $("btnNewSesi").onclick = () => formSesi();
   function formSesi(s) {
-    const v = s || { name: "", mode: "FULL", duration_min: 100, pg_twk: 65, pg_tiu: 80, pg_tkp: 166, show_result: true, shuffle: true };
+    const P0 = pkg(Object.keys(pkgs)[0]);
+    const v = s || { name: "", package_id: P0.id || "CPNS", mode: "FULL", duration_min: P0.duration, pg_twk: P0.pg1, pg_tiu: P0.pg2, pg_tkp: P0.pg3, show_result: true, shuffle: true };
+    const adaPeserta = s && st.parts.some((p) => p.session_id === s.id);
+    const modeOpts = (pid, sel) => ["FULL", ...SLOT].map((k) => `<option value="${k}" ${k === sel ? "selected" : ""}>${modeLabel(k, pid)}</option>`).join("");
     modal(s ? "Ubah Sesi Ujian" : "Sesi Ujian Baru", `
       <div class="form-grid">
         <div class="full"><label>Nama Sesi</label><input id="fsName" type="text" value="${esc(v.name)}" placeholder="Contoh: Rekrutmen Staf Batch 1 — 2026"></div>
-        <div><label>Jenis Ujian</label><select id="fsMode">${Object.entries(MODE).map(([k, m]) => `<option value="${k}" ${k === v.mode ? "selected" : ""}>${m.label}</option>`).join("")}</select></div>
+        <div class="full"><label>Paket Soal</label><select id="fsPkg" ${adaPeserta ? "disabled" : ""}>${Object.values(pkgs).map((x) => `<option value="${x.id}" ${x.id === v.package_id ? "selected" : ""}>${esc(x.name)} — ${esc(x.description || "")}</option>`).join("")}</select>
+          ${adaPeserta ? `<span class="small muted">Paket tidak dapat diubah karena sesi sudah memiliki peserta.</span>` : ""}</div>
+        <div><label>Jenis Ujian</label><select id="fsMode">${modeOpts(v.package_id, v.mode)}</select></div>
         <div><label>Durasi (menit)</label><input id="fsDur" type="number" min="5" max="300" value="${v.duration_min}"></div>
         <div><label>Dibuka (opsional)</label><input id="fsOpen" type="datetime-local" value="${toLocalInput(v.opens_at)}"></div>
         <div><label>Ditutup (opsional)</label><input id="fsClose" type="datetime-local" value="${toLocalInput(v.closes_at)}"></div>
-        <div><label>Passing Grade TWK</label><input id="fsPg1" type="number" value="${v.pg_twk}"></div>
-        <div><label>Passing Grade TIU</label><input id="fsPg2" type="number" value="${v.pg_tiu}"></div>
-        <div><label>Passing Grade TKP</label><input id="fsPg3" type="number" value="${v.pg_tkp}"></div>
+        <div><label>Passing Grade <span id="lPg1">${code(v.package_id, "TWK")}</span></label><input id="fsPg1" type="number" value="${v.pg_twk}"></div>
+        <div><label>Passing Grade <span id="lPg2">${code(v.package_id, "TIU")}</span></label><input id="fsPg2" type="number" value="${v.pg_tiu}"></div>
+        <div><label>Passing Grade <span id="lPg3">${code(v.package_id, "TKP")}</span></label><input id="fsPg3" type="number" value="${v.pg_tkp}"></div>
         <div></div>
         <label class="check full"><input id="fsShow" type="checkbox" ${v.show_result ? "checked" : ""}> Tampilkan nilai kepada peserta setelah ujian selesai</label>
         <label class="check full"><input id="fsShuf" type="checkbox" ${v.shuffle ? "checked" : ""}> Acak urutan soal & pilihan jawaban untuk tiap peserta</label>
@@ -349,6 +376,7 @@
         const row = {
           org_id: st.org,
           name: $("fsName").value.trim(),
+          package_id: $("fsPkg").value,
           mode: $("fsMode").value,
           duration_min: Number($("fsDur").value),
           opens_at: $("fsOpen").value ? new Date($("fsOpen").value).toISOString() : null,
@@ -367,8 +395,16 @@
       } }
     ]);
     setTimeout(() => {
-      const m = $("fsMode");
-      if (m) m.onchange = () => ($("fsDur").value = MODE[m.value].menit);
+      const m = $("fsMode"), pk = $("fsPkg");
+      if (!m) return;
+      m.onchange = () => ($("fsDur").value = modeMenit(m.value, pk.value));
+      pk.onchange = () => {
+        const P = pkg(pk.value);
+        m.innerHTML = modeOpts(pk.value, "FULL");
+        $("fsDur").value = P.duration;
+        $("fsPg1").value = P.pg1; $("fsPg2").value = P.pg2; $("fsPg3").value = P.pg3;
+        $("lPg1").textContent = P.c1; $("lPg2").textContent = P.c2; $("lPg3").textContent = P.c3;
+      };
     });
   }
 
@@ -380,9 +416,10 @@
     const ps = st.parts.filter((p) => p.session_id === s.id);
     $("sdTitle").textContent = s.name;
     $("sdInfo").innerHTML = `
-      <tr><td>Jenis Ujian</td><td>${MODE[s.mode].label} — ${s.duration_min} menit</td></tr>
+      <tr><td>Paket Soal</td><td><b>${esc(pkg(s.package_id).name)}</b></td></tr>
+      <tr><td>Jenis Ujian</td><td>${modeLabel(s.mode, s.package_id)} — ${s.duration_min} menit</td></tr>
       <tr><td>Jadwal</td><td>${s.opens_at || s.closes_at ? `${tgl(s.opens_at)} s.d. ${tgl(s.closes_at)}` : "Kapan saja"}</td></tr>
-      <tr><td>Passing Grade</td><td>${SECS(s.mode).map((k) => `${k} ${s["pg_" + k.toLowerCase()]}`).join(" · ")}</td></tr>
+      <tr><td>Passing Grade</td><td>${SECS(s.mode).map((k) => `${code(s.package_id, k)} ${s["pg_" + k.toLowerCase()]}`).join(" · ")}</td></tr>
       <tr><td>Link Ujian</td><td><span class="code small">${esc(new URL("index.html", location.href).href)}</span> <button class="link-btn" id="cpLink">Salin</button></td></tr>
       <tr><td>Peserta</td><td>${ps.length} terdaftar · ${ps.filter((p) => p.status === "selesai").length} selesai · ${ps.filter((p) => p.status === "mengerjakan").length} mengerjakan</td></tr>`;
     $("cpLink").onclick = () => { navigator.clipboard.writeText(new URL("index.html", location.href).href); toast("Link disalin."); };
@@ -480,7 +517,8 @@
 
   function renderHasil() {
     const rows = filteredParts();
-    const cols = [["rank", "#"], ["name", "Nama"], ["number", "No. Peserta"], ["session", "Sesi"], ["score_twk", "TWK"], ["score_tiu", "TIU"], ["score_tkp", "TKP"], ["total", "Total"], ["status", "Status"], ["durasi", "Durasi"], ["tab_switches", "Pindah tab"]];
+    const cp = ctxPkg($("fSesi").value);
+    const cols = [["rank", "#"], ["name", "Nama"], ["number", "No. Peserta"], ["session", "Sesi"], ["score_twk", hdr(cp, "TWK")], ["score_tiu", hdr(cp, "TIU")], ["score_tkp", hdr(cp, "TKP")], ["total", "Total"], ["status", "Status"], ["durasi", "Durasi"], ["tab_switches", "Pindah tab"]];
     const numeric = ["score_twk", "score_tiu", "score_tkp", "total", "durasi", "tab_switches"];
     $("hasilTable").innerHTML = `<tr>${cols.map(([k, l]) => `<th ${k !== "rank" && k !== "session" ? `data-k="${k}"` : ""} class="${numeric.includes(k) ? "num" : ""}">${l}</th>`).join("")}</tr>` +
       (rows.length ? rows.map((p, i) => `<tr class="click" data-id="${p.id}">
@@ -502,14 +540,17 @@
   }
 
   $("btnExport").onclick = () => {
-    const rows = filteredParts().map((p, i) => ({
+    const cp = ctxPkg($("fSesi").value);
+    const rows = filteredParts().map((p, i) => {
+      const pid = (sesiById(p.session_id) || {}).package_id;
+      return {
       Peringkat: i + 1, Nama: p.name || "", "No. Peserta": p.number || "", "Kode Akses": p.code,
-      Sesi: (sesiById(p.session_id) || {}).name, Status: p.status,
-      TWK: p.score_twk, TIU: p.score_tiu, TKP: p.score_tkp, Total: p.total,
+      Sesi: (sesiById(p.session_id) || {}).name, "Paket Soal": pkg(pid).name, Status: p.status,
+      [hdr(cp, "TWK")]: p.score_twk, [hdr(cp, "TIU")]: p.score_tiu, [hdr(cp, "TKP")]: p.score_tkp, Total: p.total,
       Keterangan: p.status === "selesai" ? (p.passed ? "Memenuhi PG" : "Tidak Memenuhi PG") : "",
       Mulai: p.started_at ? tgl(p.started_at) : "", Selesai: p.finished_at ? tgl(p.finished_at) : "",
       "Durasi (menit)": durasi(p), "Pindah Tab": p.tab_switches
-    }));
+    }; });
     const org = st.orgs.find((o) => o.id === st.org);
     downloadXlsx(rows, `Hasil Ujian - ${org ? org.name : ""} - ${new Date().toISOString().slice(0, 10)}.xlsx`, "Hasil");
   };
@@ -530,6 +571,7 @@
       const { data: p, error } = await sb.from("participants").select("*").eq("id", id).single();
       if (error) throw error;
       const s = sesiById(p.session_id);
+      const pid = s ? s.package_id : "CPNS";
       let qmap = {};
       if (p.items && p.items.length) {
         const ids = p.items.map((it) => it.id);
@@ -553,15 +595,15 @@
           nilai = orig !== null && orig === q.answer ? 5 : 0;
           cls = orig === null ? "new" : nilai ? "ok" : "no";
         }
-        rows += `<tr><td>${i + 1}</td><td>${q.section}</td><td class="small">${esc(q.question.length > 90 ? q.question.slice(0, 90) + "…" : q.question)}</td>
+        rows += `<tr><td>${i + 1}</td><td>${code(pid, q.section)}</td><td class="small">${esc(q.question.length > 90 ? q.question.slice(0, 90) + "…" : q.question)}</td>
           <td><b>${ans === null || ans === undefined ? "—" : LETTER[ans]}</b></td><td>${kunci}</td><td><span class="pill ${cls}">${nilai}</span></td></tr>`;
       });
       modal(`Detail: ${p.name || p.code}`, `
         <table class="kv">
           <tr><td>Nama</td><td><b>${esc(p.name || "—")}</b> (${esc(p.number || "-")})</td></tr>
-          <tr><td>Sesi</td><td>${esc(s ? s.name : "")}</td></tr>
+          <tr><td>Sesi</td><td>${esc(s ? s.name : "")} · ${esc(pkg(pid).name)}</td></tr>
           <tr><td>Waktu</td><td>${tgl(p.started_at)} → ${tgl(p.finished_at)} (${durasi(p) ?? "-"} menit)</td></tr>
-          <tr><td>Nilai</td><td>TWK <b>${p.score_twk ?? "-"}</b> · TIU <b>${p.score_tiu ?? "-"}</b> · TKP <b>${p.score_tkp ?? "-"}</b> · Total <b>${p.total ?? "-"}</b> ${statusPill(p)}</td></tr>
+          <tr><td>Nilai</td><td>${code(pid, "TWK")} <b>${p.score_twk ?? "-"}</b> · ${code(pid, "TIU")} <b>${p.score_tiu ?? "-"}</b> · ${code(pid, "TKP")} <b>${p.score_tkp ?? "-"}</b> · Total <b>${p.total ?? "-"}</b> ${statusPill(p)}</td></tr>
           <tr><td>Pindah tab</td><td class="${p.tab_switches > 2 ? "warn-tab" : ""}">${p.tab_switches} kali</td></tr>
         </table>
         <div class="table-wrap" style="max-height:45vh;margin-top:12px"><table class="data">
@@ -576,21 +618,30 @@
      BANK SOAL
      ========================================================= */
   ["qfSec", "qfOwn"].forEach((id) => ($(id).onchange = drawSoal));
+  $("qfPkg").onchange = () => renderSoal(true);
+  const curPkg = () => $("qfPkg").value || Object.keys(pkgs)[0] || "CPNS";
   $("qfCari").oninput = drawSoal;
-  async function renderSoal() {
+  async function renderSoal(keepPkg) {
+    if (!keepPkg || !$("qfPkg").options.length) {
+      const v = $("qfPkg").value;
+      $("qfPkg").innerHTML = Object.values(pkgs).map((x) => `<option value="${x.id}">📦 ${esc(x.name)}</option>`).join("");
+      if (v && pkgs[v]) $("qfPkg").value = v;
+    }
+    const pid = curPkg(), P = pkg(pid);
+    $("qfSec").innerHTML = `<option value="">Semua subtes</option>` + SLOT.map((k) => `<option value="${k}">${code(pid, k)} — ${sname(pid, k)}</option>`).join("");
     loading(true);
     try {
-      st.soal = await fetchAll(() => sb.from("questions").select("id,org_id,section,question,options,answer,scores,active")
-        .or(`org_id.is.null,org_id.eq.${st.org}`).order("id"));
+      st.soal = await fetchAll(() => sb.from("questions").select("id,org_id,section,question,options,answer,scores,active,package_id")
+        .eq("package_id", pid).or(`org_id.is.null,org_id.eq.${st.org}`).order("id"));
     } catch (e) { toast(errMsg(e)); } finally { loading(false); }
-    const JML = { TWK: 30, TIU: 35, TKP: 45 };
+    const JML = { TWK: P.j1, TIU: P.j2, TKP: P.j3 };
     const cnt = (own, sec) => st.soal.filter((q) => q.active && q.section === sec && (own ? q.org_id === st.org : q.org_id === null)).length;
     $("soalCards").innerHTML = ["TWK", "TIU", "TKP"].map((k) => {
       const o = cnt(true, k), g = cnt(false, k), n = o + g;
-      return `<div class="stat-card ${n < JML[k] ? "r" : ""}"><div class="lbl">${k} — soal aktif</div><div class="val">${n}</div>
+      return `<div class="stat-card ${n < JML[k] ? "r" : ""}"><div class="lbl">${code(pid, k)} — soal aktif</div><div class="val">${n}</div>
         <div class="sub">bawaan ${g} · tambahan ${o} · dipakai ${Math.min(n, JML[k])} per ujian${n < JML[k] ? " (kurang dari standar " + JML[k] + ")" : ""}</div></div>`;
     }).join("");
-    $("soalInfo").innerHTML = `Setiap peserta mendapat soal <b>acak</b> dari seluruh soal aktif: <b>30 TWK, 35 TIU, 45 TKP</b> (standar SKD). ` +
+    $("soalInfo").innerHTML = `<b>${esc(P.name)}</b> — ${esc(P.description || "")}. Setiap peserta mendapat soal <b>acak</b> dari soal aktif paket ini: <b>${SLOT.map((k) => JML[k] + " " + code(pid, k)).join(", ")}</b>. ` +
       `Makin banyak soal yang ditambahkan, makin berbeda soal antarpeserta. Soal yang dinonaktifkan tidak akan dipakai.`;
     drawSoal();
   }
@@ -600,7 +651,7 @@
     const canEdit = (x) => isOwner() || x.org_id === st.org;
     $("soalTable").innerHTML = `<tr><th>ID</th><th>Subtes</th><th>Soal</th><th>Kunci / Skor</th><th>Sumber</th><th>Status</th><th>Aksi</th></tr>` +
       (rows.length ? rows.slice(0, 300).map((x) => `<tr>
-        <td>${x.id}</td><td>${x.section}</td><td class="small">${esc(x.question)}</td>
+        <td>${x.id}</td><td>${code(x.package_id, x.section)}</td><td class="small">${esc(x.question)}</td>
         <td class="small">${x.section === "TKP" ? x.scores.join("-") : LETTER[x.answer]}</td>
         <td>${x.org_id ? "Tambahan" : "Bawaan"}</td>
         <td>${x.active ? `<span class="pill ok">Aktif</span>` : `<span class="pill new">Nonaktif</span>`}</td>
@@ -620,11 +671,15 @@
     }, "danger", "Ya, Hapus")));
   }
 
-  $("btnTemplate").onclick = () => downloadXlsx([
-    { Subtes: "TWK", Soal: "Contoh soal TWK ...", A: "Opsi A", B: "Opsi B", C: "Opsi C", D: "Opsi D", E: "Opsi E", Kunci: "C", "Skor TKP (A,B,C,D,E)": "", Pembahasan: "Penjelasan jawaban" },
-    { Subtes: "TIU", Soal: "2, 4, 8, 16, ...", A: "20", B: "24", C: "30", D: "32", E: "36", Kunci: "D", "Skor TKP (A,B,C,D,E)": "", Pembahasan: "Dikali 2" },
-    { Subtes: "TKP", Soal: "Contoh situasi kerja ...", A: "Sikap 1", B: "Sikap 2", C: "Sikap 3", D: "Sikap 4", E: "Sikap 5", Kunci: "", "Skor TKP (A,B,C,D,E)": "1,5,3,2,4", Pembahasan: "" }
-  ], "Template Bank Soal CAT.xlsx", "Soal");
+  const SKOR_COL = "Skor Sikap (A,B,C,D,E)";
+  $("btnTemplate").onclick = () => {
+    const pid = curPkg();
+    downloadXlsx([
+      { Subtes: code(pid, "TWK"), Soal: `Contoh soal ${sname(pid, "TWK")} ...`, A: "Opsi A", B: "Opsi B", C: "Opsi C", D: "Opsi D", E: "Opsi E", Kunci: "C", [SKOR_COL]: "", Pembahasan: "Penjelasan jawaban" },
+      { Subtes: code(pid, "TIU"), Soal: "2, 4, 8, 16, ...", A: "20", B: "24", C: "30", D: "32", E: "36", Kunci: "D", [SKOR_COL]: "", Pembahasan: "Dikali 2" },
+      { Subtes: code(pid, "TKP"), Soal: "Contoh situasi kerja ...", A: "Sikap 1", B: "Sikap 2", C: "Sikap 3", D: "Sikap 4", E: "Sikap 5", Kunci: "", [SKOR_COL]: "1,5,3,2,4", Pembahasan: "" }
+    ], `Template Soal - ${pkg(pid).name}.xlsx`, "Soal");
+  };
 
   $("fileImport").onchange = async (ev) => {
     const file = ev.target.files[0];
@@ -633,18 +688,20 @@
     try {
       const wb = XLSX.read(await file.arrayBuffer());
       const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: "" });
+      const pid = curPkg();
+      const toSlot = (c) => SLOT.find((k) => code(pid, k) === c) || (SLOT.includes(c) ? c : null);
       const errs = [], rows = [];
       data.forEach((r, i) => {
         const line = i + 2;
-        const sec = String(r.Subtes).trim().toUpperCase();
+        const sec = toSlot(String(r.Subtes).trim().toUpperCase());
         const opts = ["A", "B", "C", "D", "E"].map((k) => String(r[k]).trim());
-        if (!["TWK", "TIU", "TKP"].includes(sec)) return errs.push(`Baris ${line}: Subtes harus TWK/TIU/TKP`);
+        if (!sec) return errs.push(`Baris ${line}: Subtes harus ${SLOT.map((k) => code(pid, k)).join("/")}`);
         if (!String(r.Soal).trim()) return errs.push(`Baris ${line}: Soal kosong`);
         if (opts.some((o) => !o)) return errs.push(`Baris ${line}: opsi A–E wajib diisi`);
-        const row = { section: sec, question: String(r.Soal).trim(), options: opts, explanation: String(r.Pembahasan || "").trim() || null };
+        const row = { package_id: pid, section: sec, question: String(r.Soal).trim(), options: opts, explanation: String(r.Pembahasan || "").trim() || null };
         if (sec === "TKP") {
-          const sc = String(r["Skor TKP (A,B,C,D,E)"]).split(/[,;\s-]+/).filter(Boolean).map(Number);
-          if (sc.length !== 5 || sc.some((x) => !(x >= 1 && x <= 5))) return errs.push(`Baris ${line}: Skor TKP harus 5 angka 1–5`);
+          const sc = String(r[SKOR_COL] || r["Skor TKP (A,B,C,D,E)"] || "").split(/[,;\s-]+/).filter(Boolean).map(Number);
+          if (sc.length !== 5 || sc.some((x) => !(x >= 1 && x <= 5))) return errs.push(`Baris ${line}: Skor sikap harus 5 angka 1–5`);
           row.scores = sc;
         } else {
           const k = LETTER.indexOf(String(r.Kunci).trim().toUpperCase());
@@ -655,7 +712,7 @@
       });
       if (!rows.length) return modal("Impor Gagal", `<p>Tidak ada soal valid.</p><p class="small">${errs.slice(0, 15).map(esc).join("<br>")}</p>`, [{ text: "Tutup" }]);
       const target = "";
-      modal("Impor Bank Soal", `<p><b>${rows.length}</b> soal siap diimpor (${["TWK", "TIU", "TKP"].map((k) => `${k}: ${rows.filter((r) => r.section === k).length}`).join(", ")}).</p>
+      modal("Impor Bank Soal", `<p><b>${rows.length}</b> soal siap diimpor ke paket <b>${esc(pkg(pid).name)}</b> (${SLOT.map((k) => `${code(pid, k)}: ${rows.filter((r) => r.section === k).length}`).join(", ")}).</p>
         ${errs.length ? `<p class="small" style="color:var(--red)">${errs.length} baris dilewati:<br>${errs.slice(0, 10).map(esc).join("<br>")}</p>` : ""}${target}`, [
         { text: "Batal" },
         { text: "Impor", cls: "primary", fn: async () => {
