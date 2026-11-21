@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard CAT — Admin & Pimpinan</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="admin.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">CAT</div>
+    <div>
+      <div class="brand-title">Dashboard Hasil Ujian</div>
+      <div class="brand-sub" id="orgName">Admin & Pimpinan</div>
+    </div>
+  </div>
+  <div class="top-right" id="topRight"></div>
+</header>
+
+<!-- ============ LOGIN ============ -->
+<section id="scrLogin" class="screen">
+  <div class="card login-card">
+    <h2>Login Admin</h2>
+    <p class="muted">Masuk untuk mengelola ujian dan melihat hasil peserta.</p>
+    <label>Email</label>
+    <input id="inEmail" type="text" autocomplete="username">
+    <label>Kata Sandi</label>
+    <input id="inPass" type="password" autocomplete="current-password">
+    <div id="pass2Box" class="hidden">
+      <label>Ulangi Kata Sandi</label>
+      <input id="inPass2" type="password" autocomplete="new-password">
+    </div>
+    <div class="err" id="loginErr"></div>
+    <button class="btn primary block" id="btnLogin">Masuk</button>
+    <p class="small muted" style="text-align:center;margin:14px 0 0">
+      <span id="swText">Belum punya akun?</span> <a href="#" id="btnSwitch">Daftar</a>
+    </p>
+  </div>
+</section>
+
+<!-- ============ APLIKASI ============ -->
+<div id="app" class="hidden">
+  <nav class="side">
+    <div class="org-pick hidden" id="orgPickBox">
+      <label>Klien / Perusahaan</label>
+      <select id="orgPick"></select>
+    </div>
+    <a data-view="ringkasan" class="active">📊 Ringkasan</a>
+    <a data-view="sesi">🗂️ Sesi Ujian</a>
+    <a data-view="hasil">🏆 Hasil Peserta</a>
+    <a data-view="soal">📚 Bank Soal</a>
+    <a data-view="klien" class="owner-only hidden">🏢 Klien & Admin</a>
+    <div class="side-foot"><button class="btn sm block" id="btnLogout">Keluar</button></div>
+  </nav>
+
+  <main class="main">
+    <!-- RINGKASAN -->
+    <section id="v-ringkasan" class="view">
+      <div class="view-head">
+        <h2>Ringkasan</h2>
+        <div class="tools">
+          <select id="rsSesi"></select>
+          <button class="btn sm" data-refresh>⟳ Muat ulang</button>
+        </div>
+      </div>
+      <div class="cards" id="statCards"></div>
+      <div class="chart-grid">
+        <div class="card"><h4>Rata-rata Nilai vs Passing Grade</h4><canvas id="chAvg"></canvas></div>
+        <div class="card"><h4>Status Kelulusan</h4><canvas id="chPass"></canvas></div>
+        <div class="card wide"><h4>Sebaran Nilai Total</h4><canvas id="chDist"></canvas></div>
+      </div>
+      <div class="card">
+        <h4>10 Peserta Terbaik</h4>
+        <div class="table-wrap"><table class="data" id="topTable"></table></div>
+      </div>
+    </section>
+
+    <!-- SESI -->
+    <section id="v-sesi" class="view hidden">
+      <div class="view-head">
+        <h2>Sesi Ujian</h2>
+        <div class="tools"><button class="btn primary" id="btnNewSesi">+ Sesi Baru</button></div>
+      </div>
+      <div class="card"><div class="table-wrap"><table class="data" id="sesiTable"></table></div></div>
+    </section>
+
+    <!-- DETAIL SESI -->
+    <section id="v-sesidetail" class="view hidden">
+      <div class="view-head">
+        <div><a class="back" id="backSesi">‹ Semua sesi</a><h2 id="sdTitle"></h2></div>
+        <div class="tools">
+          <button class="btn sm" id="sdEdit">Ubah</button>
+          <button class="btn sm" id="sdExpire" title="Nilai otomatis peserta yang waktunya habis tetapi belum menekan Selesai">Akhiri yang kedaluwarsa</button>
+          <button class="btn sm" id="sdExport">⬇ Ekspor Kode (Excel)</button>
+          <button class="btn primary sm" id="sdAdd">+ Tambah Peserta</button>
+        </div>
+      </div>
+      <div class="card"><table class="kv" id="sdInfo"></table></div>
+      <div class="card"><div class="table-wrap"><table class="data" id="sdTable"></table></div></div>
+      <div class="row-btn"><button class="btn danger sm" id="sdDelete">Hapus Sesi</button></div>
+    </section>
+
+    <!-- HASIL -->
+    <section id="v-hasil" class="view hidden">
+      <div class="view-head">
+        <h2>Hasil Peserta</h2>
+        <div class="tools">
+          <button class="btn sm" data-refresh>⟳ Muat ulang</button>
+          <button class="btn primary sm" id="btnExport">⬇ Ekspor Excel</button>
+        </div>
+      </div>
+      <div class="card filters">
+        <select id="fSesi"></select>
+        <select id="fStatus">
+          <option value="">Semua status</option>
+          <option value="selesai">Selesai</option>
+          <option value="mengerjakan">Sedang mengerjakan</option>
+          <option value="baru">Belum mulai</option>
+        </select>
+        <select id="fLulus">
+          <option value="">Lulus & tidak lulus</option>
+          <option value="1">Memenuhi PG</option>
+          <option value="0">Tidak memenuhi PG</option>
+        </select>
+        <input id="fCari" type="text" placeholder="Cari nama / nomor / kode…">
+      </div>
+      <div class="card"><div class="table-wrap"><table class="data sortable" id="hasilTable"></table></div></div>
+    </section>
+
+    <!-- BANK SOAL -->
+    <section id="v-soal" class="view hidden">
+      <div class="view-head">
+        <h2>Bank Soal</h2>
+        <div class="tools">
+          <button class="btn sm" id="btnTemplate">⬇ Template Excel</button>
+          <label class="btn primary sm file-btn">⬆ Impor Excel<input type="file" id="fileImport" accept=".xlsx,.xls,.csv" hidden></label>
+        </div>
+      </div>
+      <div class="card">
+        <p class="small muted" id="soalInfo"></p>
+        <div class="cards" id="soalCards"></div>
+      </div>
+      <div class="card filters">
+        <select id="qfSec"><option value="">Semua subtes</option><option>TWK</option><option>TIU</option><option>TKP</option></select>
+        <select id="qfOwn"><option value="">Semua bank</option><option value="umum">Bank umum</option><option value="org">Bank klien ini</option></select>
+        <input id="qfCari" type="text" placeholder="Cari teks soal…">
+      </div>
+      <div class="card"><div class="table-wrap"><table class="data" id="soalTable"></table></div></div>
+    </section>
+
+    <!-- KLIEN -->
+    <section id="v-klien" class="view hidden">
+      <div class="view-head">
+        <h2>Klien & Admin</h2>
+        <div class="tools"><button class="btn primary" id="btnNewOrg">+ Klien Baru</button></div>
+      </div>
+      <div class="card"><div class="table-wrap"><table class="data" id="orgTable"></table></div></div>
+      <div class="view-head"><h3>Akun Admin / Pimpinan</h3><div class="tools"><button class="btn primary sm" id="btnNewAdmin">+ Tambah Admin</button></div></div>
+      <div class="card"><div class="table-wrap"><table class="data" id="adminTable"></table></div></div>
+    </section>
+  </main>
+</div>
+
+<div class="modal hidden" id="modal">
+  <div class="modal-box wide">
+    <h3 id="mTitle"></h3>
+    <div id="mBody"></div>
+    <div class="err" id="mErr"></div>
+    <div class="row-btn" id="mBtns"></div>
+  </div>
+</div>
+<div class="toast hidden" id="toast"></div>
+<div class="loading hidden" id="loading"><div class="spinner"></div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="config.js"></script>
+<script src="admin.js"></script>
+</body>
+</html>

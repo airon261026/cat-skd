@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CAT SKD Online — Ujian Peserta</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <img id="orgLogo" class="org-logo hidden" alt="">
+    <div class="logo" id="defLogo">CAT</div>
+    <div>
+      <div class="brand-title" id="brandTitle">Computer Assisted Test</div>
+      <div class="brand-sub" id="brandSub">Seleksi Kompetensi Dasar</div>
+    </div>
+  </div>
+  <div class="top-right" id="topRight"></div>
+</header>
+
+<!-- ============ KODE AKSES ============ -->
+<section id="scrKode" class="screen">
+  <div class="card login-card">
+    <h2>Masuk Ujian</h2>
+    <p class="muted">Masukkan kode akses yang diberikan oleh panitia.</p>
+    <label>Kode Akses</label>
+    <input id="inKode" type="text" placeholder="Contoh: AB12CD34" autocomplete="off" maxlength="12" style="text-transform:uppercase;letter-spacing:2px;font-weight:700">
+    <div class="err" id="kodeErr"></div>
+    <button class="btn primary block" id="btnCek">Lanjut</button>
+  </div>
+</section>
+
+<!-- ============ KONFIRMASI ============ -->
+<section id="scrInfo" class="screen hidden">
+  <div class="card info-card">
+    <h2>Konfirmasi Data & Petunjuk Ujian</h2>
+    <table class="kv" id="infoTable"></table>
+    <div class="two-col">
+      <div><label>Nama Lengkap</label><input id="inNama" type="text" autocomplete="off"></div>
+      <div><label>Nomor Peserta / NIK (opsional)</label><input id="inNo" type="text" autocomplete="off"></div>
+    </div>
+    <h3>Komposisi Soal</h3>
+    <table class="grid-table" id="komposisi"></table>
+    <h3>Petunjuk</h3>
+    <ol class="rules">
+      <li>Waktu berjalan setelah tombol <b>Mulai Ujian</b> ditekan dan ujian berakhir otomatis ketika waktu habis.</li>
+      <li>Pilih jawaban dengan mengklik pilihan A–E atau menekan tombol <kbd>A</kbd>–<kbd>E</kbd>. Pindah soal dengan <kbd>←</kbd> <kbd>→</kbd>.</li>
+      <li>Tandai soal yang ingin ditinjau kembali dengan tombol <b>Ragu-ragu</b>.</li>
+      <li><b>Jangan berpindah tab atau aplikasi.</b> Setiap perpindahan tercatat dan dilaporkan kepada panitia.</li>
+      <li>Jawaban tersimpan otomatis ke server. Jika koneksi terputus atau browser tertutup, masuk kembali dengan kode yang sama untuk melanjutkan.</li>
+      <li>Kode akses hanya berlaku untuk satu kali ujian.</li>
+    </ol>
+    <div class="err" id="startErr"></div>
+    <div class="row-btn">
+      <button class="btn" id="btnBack">Kembali</button>
+      <button class="btn primary" id="btnStart">Mulai Ujian</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ UJIAN ============ -->
+<section id="scrExam" class="screen hidden">
+  <div class="exam">
+    <div class="exam-main card">
+      <div class="q-head">
+        <div>
+          <span class="badge" id="qSec">TWK</span>
+          <span class="q-no">Soal nomor <b id="qNo">1</b></span>
+        </div>
+        <div class="font-ctrl">
+          <span id="saveState" class="save-state"></span>
+          <button class="btn sm" data-font="-1">A−</button>
+          <button class="btn sm" data-font="1">A+</button>
+        </div>
+      </div>
+      <div class="q-text noselect" id="qText"></div>
+      <div class="opts noselect" id="qOpts"></div>
+      <div class="q-nav">
+        <button class="btn" id="btnPrev">‹ Sebelumnya</button>
+        <button class="btn warn" id="btnRagu">Ragu-ragu</button>
+        <button class="btn primary" id="btnNext">Berikutnya ›</button>
+      </div>
+    </div>
+
+    <aside class="exam-side card">
+      <div class="timer-box">
+        <div class="muted small">Sisa Waktu</div>
+        <div class="timer" id="timer">00:00:00</div>
+      </div>
+      <div class="legend">
+        <span><i class="dot done"></i>Dijawab</span>
+        <span><i class="dot ragu"></i>Ragu-ragu</span>
+        <span><i class="dot"></i>Belum</span>
+      </div>
+      <div id="navGrid"></div>
+      <div class="stat small" id="statBox"></div>
+      <button class="btn danger block" id="btnFinish">Selesai Ujian</button>
+    </aside>
+  </div>
+</section>
+
+<!-- ============ HASIL ============ -->
+<section id="scrResult" class="screen hidden">
+  <div class="card result-card">
+    <h2>Ujian Selesai</h2>
+    <div id="resBody"></div>
+    <div class="row-btn">
+      <button class="btn" id="btnPrint">Cetak</button>
+      <button class="btn primary" id="btnOut">Keluar</button>
+    </div>
+  </div>
+</section>
+
+<div class="modal hidden" id="modal">
+  <div class="modal-box">
+    <h3 id="mTitle"></h3>
+    <div id="mBody"></div>
+    <div class="row-btn" id="mBtns"></div>
+  </div>
+</div>
+
+<div class="loading hidden" id="loading"><div class="spinner"></div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="ujian.js"></script>
+</body>
+</html>
