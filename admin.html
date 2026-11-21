@@ -11,10 +11,11 @@
 
 <header class="topbar">
   <div class="brand">
-    <div class="logo">CAT</div>
+    <img id="brandLogo" class="org-logo hidden" alt="">
+    <div class="logo" id="brandDef">CAT</div>
     <div>
-      <div class="brand-title">Dashboard Hasil Ujian</div>
-      <div class="brand-sub" id="orgName">Admin & Pimpinan</div>
+      <div class="brand-title" id="orgName">Dashboard Rekrutmen</div>
+      <div class="brand-sub">Dashboard Hasil Ujian Rekrutmen</div>
     </div>
   </div>
   <div class="top-right" id="topRight"></div>
@@ -24,7 +25,7 @@
 <section id="scrLogin" class="screen">
   <div class="card login-card">
     <h2>Login Admin</h2>
-    <p class="muted">Masuk untuk mengelola ujian dan melihat hasil peserta.</p>
+    <p class="muted">Masuk untuk mengelola ujian rekrutmen dan melihat hasil peserta.</p>
     <label>Email</label>
     <input id="inEmail" type="text" autocomplete="username">
     <label>Kata Sandi</label>
@@ -55,15 +56,11 @@
 <!-- ============ APLIKASI ============ -->
 <div id="app" class="hidden">
   <nav class="side">
-    <div class="org-pick hidden" id="orgPickBox">
-      <label>Klien / Perusahaan</label>
-      <select id="orgPick"></select>
-    </div>
     <a data-view="ringkasan" class="active">📊 Ringkasan</a>
     <a data-view="sesi">🗂️ Sesi Ujian</a>
     <a data-view="hasil">🏆 Hasil Peserta</a>
     <a data-view="soal">📚 Bank Soal</a>
-    <a data-view="klien" class="owner-only hidden">🏢 Klien & Admin</a>
+    <a data-view="pengaturan" class="owner-only hidden">⚙️ Pengaturan</a>
     <div class="side-foot"><button class="btn sm block" id="btnLogout">Keluar</button></div>
   </nav>
 
@@ -156,21 +153,30 @@
       </div>
       <div class="card filters">
         <select id="qfSec"><option value="">Semua subtes</option><option>TWK</option><option>TIU</option><option>TKP</option></select>
-        <select id="qfOwn"><option value="">Semua bank</option><option value="umum">Bank umum</option><option value="org">Bank klien ini</option></select>
+        <select id="qfOwn"><option value="">Semua sumber</option><option value="umum">Soal bawaan</option><option value="org">Soal tambahan</option></select>
         <input id="qfCari" type="text" placeholder="Cari teks soal…">
       </div>
       <div class="card"><div class="table-wrap"><table class="data" id="soalTable"></table></div></div>
     </section>
 
-    <!-- KLIEN -->
-    <section id="v-klien" class="view hidden">
-      <div class="view-head">
-        <h2>Klien & Admin</h2>
-        <div class="tools"><button class="btn primary" id="btnNewOrg">+ Klien Baru</button></div>
+    <!-- PENGATURAN -->
+    <section id="v-pengaturan" class="view hidden">
+      <div class="view-head"><h2>Pengaturan</h2></div>
+      <div class="card">
+        <h4>Profil Perusahaan</h4>
+        <p class="small muted">Nama dan logo ini tampil di halaman ujian peserta, dashboard, dan hasil cetak.</p>
+        <div class="form-grid">
+          <div><label>Nama Perusahaan</label><input id="psName" type="text"></div>
+          <div><label>URL Logo (opsional)</label><input id="psLogo" type="text" placeholder="https://…/logo.png"></div>
+        </div>
+        <div class="logo-preview" id="psPreview"></div>
+        <div class="row-btn"><button class="btn primary" id="psSave">Simpan Profil</button></div>
       </div>
-      <div class="card"><div class="table-wrap"><table class="data" id="orgTable"></table></div></div>
-      <div class="view-head"><h3>Akun Admin / Pimpinan</h3><div class="tools"><button class="btn primary sm" id="btnNewAdmin">+ Tambah Admin</button></div></div>
-      <div class="card"><div class="table-wrap"><table class="data" id="adminTable"></table></div></div>
+      <div class="view-head"><h3>Akun Admin</h3><div class="tools"><button class="btn primary sm" id="btnNewAdmin">+ Tambah Admin</button></div></div>
+      <div class="card">
+        <p class="small muted">Admin dapat membuat sesi ujian, menambah peserta, mengelola bank soal, dan melihat seluruh hasil.</p>
+        <div class="table-wrap"><table class="data" id="adminTable"></table></div>
+      </div>
     </section>
   </main>
 </div>

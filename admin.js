@@ -167,12 +167,12 @@
         return;
       }
       st.me = me;
-      $("topRight").innerHTML = `<b>${esc(me.name || user.email)}</b><br>${isOwner() ? "Pemilik Aplikasi" : "Admin"}`;
+      $("topRight").innerHTML = `<b>${esc(me.name || user.email)}</b><br>${isOwner() ? "Pemilik" : "Admin"}`;
       document.querySelectorAll(".owner-only").forEach((el) => el.classList.toggle("hidden", !isOwner()));
       await loadOrgs();
       $("scrLogin").classList.add("hidden");
       $("app").classList.remove("hidden");
-      if (!st.org && isOwner()) { setView("klien"); toast("Buat klien pertama Anda terlebih dahulu."); }
+      if (st.baru) { setView("pengaturan"); toast("Lengkapi nama dan logo perusahaan terlebih dahulu."); }
       else await reload();
     } catch (e) {
       $("loginErr").textContent = errMsg(e);
@@ -180,28 +180,29 @@
   }
 
   async function loadOrgs() {
-    const { data, error } = await sb.from("organizations").select("*").order("name");
+    const { data, error } = await sb.from("organizations").select("*").order("created_at");
     if (error) throw error;
     st.orgs = data;
-    if (isOwner()) {
-      $("orgPickBox").classList.remove("hidden");
-      const saved = localStorage.getItem("cat_admin_org");
-      st.org = (data.find((o) => o.id === (st.org || saved)) || data[0] || {}).id || null;
-      $("orgPick").innerHTML = data.map((o) => `<option value="${o.id}">${esc(o.name)}</option>`).join("");
-      if (st.org) $("orgPick").value = st.org;
-    } else {
-      st.org = st.me.org_id;
+    if (isOwner() && !data.length) {
+      // mode satu perusahaan: profil perusahaan dibuat otomatis saat pertama kali masuk
+      const { data: o, error: e2 } = await sb.from("organizations").insert({ name: "Nama Perusahaan" }).select().single();
+      if (e2) throw e2;
+      st.orgs = [o];
+      st.baru = true;
     }
-    const org = st.orgs.find((o) => o.id === st.org);
-    $("orgName").textContent = org ? org.name : "Admin & Pimpinan";
+    st.org = isOwner() ? (st.orgs[0] || {}).id || null : st.me.org_id;
+    setBrand();
   }
-  $("orgPick").onchange = async () => {
-    st.org = $("orgPick").value;
-    localStorage.setItem("cat_admin_org", st.org);
-    $("orgName").textContent = st.orgs.find((o) => o.id === st.org).name;
-    if (st.view === "sesidetail") st.view = "sesi";
-    await reload();
-  };
+  const curOrg = () => st.orgs.find((o) => o.id === st.org) || {};
+  function setBrand() {
+    const o = curOrg();
+    $("orgName").textContent = o.name || "Dashboard Rekrutmen";
+    document.title = `Dashboard Rekrutmen — ${o.name || "CAT"}`;
+    const has = !!o.logo_url;
+    $("brandLogo").classList.toggle("hidden", !has);
+    $("brandDef").classList.toggle("hidden", has);
+    if (has) $("brandLogo").src = o.logo_url;
+  }
 
   /* ---------- DATA ---------- */
   async function reload() {
@@ -242,11 +243,8 @@
     const nav = st.view === "sesidetail" ? "sesi" : st.view;
     document.querySelectorAll(".side a[data-view]").forEach((a) => a.classList.toggle("active", a.dataset.view === nav));
     document.querySelectorAll(".view").forEach((el) => el.classList.toggle("hidden", el.id !== "v-" + st.view));
-    if (!st.org && st.view !== "klien") {
-      toast("Belum ada klien. Buat klien di menu Klien & Admin.");
-      return;
-    }
-    ({ ringkasan: renderRingkasan, sesi: renderSesi, sesidetail: renderSesiDetail, hasil: renderHasil, soal: renderSoal, klien: renderKlien })[st.view]();
+    if (!st.org) return toast("Profil perusahaan belum tersedia. Hubungi pemilik aplikasi.");
+    ({ ringkasan: renderRingkasan, sesi: renderSesi, sesidetail: renderSesiDetail, hasil: renderHasil, soal: renderSoal, pengaturan: renderPengaturan })[st.view]();
   }
 
   /* =========================================================
@@ -585,24 +583,26 @@
       st.soal = await fetchAll(() => sb.from("questions").select("id,org_id,section,question,options,answer,scores,active")
         .or(`org_id.is.null,org_id.eq.${st.org}`).order("id"));
     } catch (e) { toast(errMsg(e)); } finally { loading(false); }
+    const JML = { TWK: 30, TIU: 35, TKP: 45 };
     const cnt = (own, sec) => st.soal.filter((q) => q.active && q.section === sec && (own ? q.org_id === st.org : q.org_id === null)).length;
     $("soalCards").innerHTML = ["TWK", "TIU", "TKP"].map((k) => {
-      const o = cnt(true, k), g = cnt(false, k);
-      return `<div class="stat-card"><div class="lbl">${k}</div><div class="val">${o || g}</div><div class="sub">${o ? "memakai bank klien" : "memakai bank umum"} (umum ${g} · klien ${o})</div></div>`;
+      const o = cnt(true, k), g = cnt(false, k), n = o + g;
+      return `<div class="stat-card ${n < JML[k] ? "r" : ""}"><div class="lbl">${k} — soal aktif</div><div class="val">${n}</div>
+        <div class="sub">bawaan ${g} · tambahan ${o} · dipakai ${Math.min(n, JML[k])} per ujian${n < JML[k] ? " (kurang dari standar " + JML[k] + ")" : ""}</div></div>`;
     }).join("");
-    $("soalInfo").innerHTML = `Ujian memakai <b>bank soal klien</b> bila klien memiliki soal aktif pada subtes tersebut; jika tidak, memakai <b>bank soal umum</b>. ` +
-      (isOwner() ? "Sebagai pemilik, impor Anda masuk ke bank umum kecuali dipilih lain." : "Impor Excel akan menambah soal ke bank soal perusahaan Anda.");
+    $("soalInfo").innerHTML = `Setiap peserta mendapat soal <b>acak</b> dari seluruh soal aktif: <b>30 TWK, 35 TIU, 45 TKP</b> (standar SKD). ` +
+      `Makin banyak soal yang ditambahkan, makin berbeda soal antarpeserta. Soal yang dinonaktifkan tidak akan dipakai.`;
     drawSoal();
   }
   function drawSoal() {
     const sec = $("qfSec").value, own = $("qfOwn").value, q = $("qfCari").value.trim().toLowerCase();
     const rows = st.soal.filter((x) => (!sec || x.section === sec) && (!own || (own === "umum" ? x.org_id === null : x.org_id === st.org)) && (!q || x.question.toLowerCase().includes(q)));
     const canEdit = (x) => isOwner() || x.org_id === st.org;
-    $("soalTable").innerHTML = `<tr><th>ID</th><th>Subtes</th><th>Soal</th><th>Kunci / Skor</th><th>Bank</th><th>Status</th><th>Aksi</th></tr>` +
+    $("soalTable").innerHTML = `<tr><th>ID</th><th>Subtes</th><th>Soal</th><th>Kunci / Skor</th><th>Sumber</th><th>Status</th><th>Aksi</th></tr>` +
       (rows.length ? rows.slice(0, 300).map((x) => `<tr>
         <td>${x.id}</td><td>${x.section}</td><td class="small">${esc(x.question)}</td>
         <td class="small">${x.section === "TKP" ? x.scores.join("-") : LETTER[x.answer]}</td>
-        <td>${x.org_id ? "Klien" : "Umum"}</td>
+        <td>${x.org_id ? "Tambahan" : "Bawaan"}</td>
         <td>${x.active ? `<span class="pill ok">Aktif</span>` : `<span class="pill new">Nonaktif</span>`}</td>
         <td>${canEdit(x) ? `<button class="link-btn" data-tg="${x.id}">${x.active ? "Nonaktifkan" : "Aktifkan"}</button><button class="link-btn red" data-dq="${x.id}">Hapus</button>` : ""}</td></tr>`).join("") +
         (rows.length > 300 ? `<tr><td colspan="7" class="empty">Menampilkan 300 dari ${rows.length} soal. Gunakan filter.</td></tr>` : "")
@@ -654,14 +654,12 @@
         rows.push(row);
       });
       if (!rows.length) return modal("Impor Gagal", `<p>Tidak ada soal valid.</p><p class="small">${errs.slice(0, 15).map(esc).join("<br>")}</p>`, [{ text: "Tutup" }]);
-      const target = isOwner()
-        ? `<label>Simpan ke</label><select id="impTarget"><option value="umum">Bank soal umum (semua klien)</option><option value="org">Bank soal klien: ${esc((st.orgs.find((o) => o.id === st.org) || {}).name)}</option></select>`
-        : "";
+      const target = "";
       modal("Impor Bank Soal", `<p><b>${rows.length}</b> soal siap diimpor (${["TWK", "TIU", "TKP"].map((k) => `${k}: ${rows.filter((r) => r.section === k).length}`).join(", ")}).</p>
         ${errs.length ? `<p class="small" style="color:var(--red)">${errs.length} baris dilewati:<br>${errs.slice(0, 10).map(esc).join("<br>")}</p>` : ""}${target}`, [
         { text: "Batal" },
         { text: "Impor", cls: "primary", fn: async () => {
-          const org = isOwner() && $("impTarget").value === "umum" ? null : st.org;
+          const org = st.org;
           const { error } = await sb.from("questions").insert(rows.map((r) => ({ ...r, org_id: org })));
           if (error) throw error;
           toast(`${rows.length} soal diimpor.`);
@@ -674,91 +672,65 @@
   };
 
   /* =========================================================
-     KLIEN & ADMIN (khusus pemilik)
+     PENGATURAN (khusus pemilik)
      ========================================================= */
-  async function renderKlien() {
+  async function renderPengaturan() {
     if (!isOwner()) return setView("ringkasan");
+    const o = curOrg();
+    $("psName").value = o.name || "";
+    $("psLogo").value = o.logo_url || "";
+    previewLogo();
     loading(true);
     try {
-      const counts = {};
-      await Promise.all(st.orgs.map(async (o) => {
-        const { count } = await sb.from("participants").select("id", { count: "exact", head: true }).eq("org_id", o.id);
-        counts[o.id] = count || 0;
-      }));
-      $("orgTable").innerHTML = `<tr><th>Nama Klien</th><th class="num">Kuota terpakai</th><th>Logo</th><th>Dibuat</th><th>Aksi</th></tr>` +
-        (st.orgs.length ? st.orgs.map((o) => `<tr><td><b>${esc(o.name)}</b></td>
-          <td class="num">${counts[o.id]} / ${o.quota}</td>
-          <td>${o.logo_url ? `<img src="${esc(o.logo_url)}" style="height:26px">` : "-"}</td><td>${tgl(o.created_at)}</td>
-          <td><button class="link-btn" data-eo="${o.id}">Ubah</button><button class="link-btn red" data-do="${o.id}">Hapus</button></td></tr>`).join("")
-          : `<tr><td colspan="5" class="empty">Belum ada klien.</td></tr>`);
-      $("orgTable").querySelectorAll("[data-eo]").forEach((b) => (b.onclick = () => formOrg(st.orgs.find((o) => o.id === b.dataset.eo))));
-      $("orgTable").querySelectorAll("[data-do]").forEach((b) => (b.onclick = () => {
-        const o = st.orgs.find((x) => x.id === b.dataset.do);
-        confirmBox("Hapus Klien?", `Klien <b>${esc(o.name)}</b> beserta seluruh sesi, peserta, hasil ujian, bank soal, dan akun adminnya akan dihapus permanen.`, async () => {
-          const { error } = await sb.from("organizations").delete().eq("id", o.id);
-          if (error) throw error;
-          if (st.org === o.id) st.org = null;
-          await loadOrgs(); await reload(); setView("klien"); toast("Klien dihapus.");
-        }, "danger", "Ya, Hapus Permanen");
-      }));
-
       const { data: admins, error } = await sb.from("admins").select("*").order("created_at");
       if (error) throw error;
-      $("adminTable").innerHTML = `<tr><th>Nama</th><th>Email</th><th>Peran</th><th>Klien</th><th>Aksi</th></tr>` +
+      $("adminTable").innerHTML = `<tr><th>Nama</th><th>Email</th><th>Peran</th><th>Aksi</th></tr>` +
         admins.map((a) => `<tr><td>${esc(a.name || "-")}</td><td>${esc(a.email || "-")}</td><td>${a.role === "owner" ? "Pemilik" : "Admin"}</td>
-          <td>${esc((st.orgs.find((o) => o.id === a.org_id) || {}).name || "Semua")}</td>
           <td>${a.role !== "owner" ? `<button class="link-btn red" data-da="${a.user_id}">Cabut akses</button>` : ""}</td></tr>`).join("");
       $("adminTable").querySelectorAll("[data-da]").forEach((b) => (b.onclick = () => confirmBox("Cabut Akses Admin?", "Akun ini tidak akan bisa membuka dashboard lagi.", async () => {
         const { error } = await sb.from("admins").delete().eq("user_id", b.dataset.da);
         if (error) throw error;
-        renderKlien(); toast("Akses dicabut.");
+        renderPengaturan(); toast("Akses dicabut.");
       }, "danger", "Ya, Cabut")));
     } catch (e) { toast(errMsg(e)); } finally { loading(false); }
   }
-
-  $("btnNewOrg").onclick = () => formOrg();
-  function formOrg(o) {
-    const v = o || { name: "", quota: 100, logo_url: "" };
-    modal(o ? "Ubah Klien" : "Klien Baru", `
-      <label>Nama Perusahaan / Instansi</label><input id="foName" type="text" value="${esc(v.name)}">
-      <label>Kuota Peserta</label><input id="foQuota" type="number" min="1" value="${v.quota}">
-      <label>URL Logo (opsional)</label><input id="foLogo" type="text" value="${esc(v.logo_url || "")}" placeholder="https://…/logo.png">`, [
-      { text: "Batal" },
-      { text: "Simpan", cls: "primary", fn: async () => {
-        const row = { name: $("foName").value.trim(), quota: Number($("foQuota").value) || 100, logo_url: $("foLogo").value.trim() || null };
-        if (!row.name) throw new Error("Nama klien wajib diisi.");
-        const q = o ? sb.from("organizations").update(row).eq("id", o.id) : sb.from("organizations").insert(row).select().single();
-        const { data, error } = await q;
-        if (error) throw error;
-        if (!o && data) { st.org = data.id; localStorage.setItem("cat_admin_org", data.id); }
-        await loadOrgs(); await reload(); setView("klien");
-        toast("Klien disimpan.");
-      } }
-    ]);
+  function previewLogo() {
+    const u = $("psLogo").value.trim();
+    $("psPreview").innerHTML = u ? `<img src="${esc(u)}" alt="Pratinjau logo" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'small',style:'color:var(--red)',textContent:'Logo tidak dapat dimuat dari URL tersebut.'}))">` : "";
   }
+  $("psLogo").oninput = previewLogo;
+  $("psSave").onclick = async () => {
+    const row = { name: $("psName").value.trim(), logo_url: $("psLogo").value.trim() || null };
+    if (!row.name) return toast("Nama perusahaan wajib diisi.");
+    loading(true);
+    const { error } = await sb.from("organizations").update(row).eq("id", st.org);
+    loading(false);
+    if (error) return toast(errMsg(error));
+    st.baru = false;
+    await loadOrgs();
+    toast("Profil perusahaan disimpan.");
+  };
 
   $("btnNewAdmin").onclick = () => {
-    if (!st.orgs.length) return toast("Buat klien terlebih dahulu.");
-    modal("Tambah Admin / Pimpinan Klien", `
-      <label>Klien</label><select id="faOrg">${st.orgs.map((o) => `<option value="${o.id}" ${o.id === st.org ? "selected" : ""}>${esc(o.name)}</option>`).join("")}</select>
+    modal("Tambah Admin", `
       <label>Nama</label><input id="faName" type="text">
       <label>Email</label><input id="faEmail" type="email">
       <label>Kata Sandi Awal (min. 8 karakter)</label><input id="faPass" type="password" autocomplete="new-password">
-      <p class="small muted">Jika email sudah terdaftar, kata sandi diabaikan dan akun langsung diberi akses ke klien terpilih.</p>`, [
+      <p class="small muted">Berikan email & kata sandi ini kepada admin. Admin bisa menggantinya lewat "Lupa kata sandi?" di halaman login. Jika email sudah terdaftar, kata sandi diabaikan dan akun langsung diberi akses.</p>`, [
       { text: "Batal" },
       { text: "Tambah", cls: "primary", fn: async () => {
-        const email = $("faEmail").value.trim(), pass = $("faPass").value, name = $("faName").value.trim(), org = $("faOrg").value;
+        const email = $("faEmail").value.trim(), pass = $("faPass").value, name = $("faName").value.trim();
         if (!email) throw new Error("Email wajib diisi.");
-        let r = await sb.rpc("assign_admin", { p_email: email, p_org: org, p_name: name || null });
+        let r = await sb.rpc("assign_admin", { p_email: email, p_org: st.org, p_name: name || null });
         if (r.error && /belum terdaftar/.test(r.error.message)) {
           if (pass.length < 8) throw new Error("Kata sandi minimal 8 karakter.");
           const tmp = supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_KEY, { auth: { persistSession: false, autoRefreshToken: false, storageKey: "cat-tmp-signup" } });
           const su = await tmp.auth.signUp({ email, password: pass });
           if (su.error) throw su.error;
-          r = await sb.rpc("assign_admin", { p_email: email, p_org: org, p_name: name || null });
+          r = await sb.rpc("assign_admin", { p_email: email, p_org: st.org, p_name: name || null });
         }
         if (r.error) throw r.error;
-        renderKlien();
+        renderPengaturan();
         toast("Admin ditambahkan.");
       } }
     ]);

@@ -68,3 +68,5 @@ input[type=number],input[type=datetime-local],input[type=email],input[type=passw
   .form-grid{grid-template-columns:1fr}
 }
 @media print{.side,.tools,.filters{display:none!important} #app{display:block}}
+.logo-preview img{height:56px;margin-top:12px;border:1px solid var(--line);border-radius:8px;padding:4px;background:#fff}
+.topbar .org-logo{height:40px}
